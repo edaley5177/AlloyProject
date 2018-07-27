@@ -32,7 +32,25 @@ sig QuadrilateralMaze {
 	
 
 }
+sig heart{}
+//a health bar has zero or more hearts
+sig healthBar set hearts{
+} 
+abstract sig Being{
+	//a being can be in a room
+	currRoom in rooms
+	
+}
+sig Player extends Being{
+	//if the number of hearts goes below 1, then the player goes back to the start room
+	one healthBar
 
+}
+sig Monster extends Being{
+	//if the number of hearts goes below 1, then the monster dissapears and never comes back for this generation of the maze
+	one healthBar
+	one spawnRoom
+}
 pred show (m:QuadrilateralMaze) {
 #rooms=4
  	one Walls
