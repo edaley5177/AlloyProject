@@ -52,7 +52,8 @@ sig QuadrilateralMaze {
 	#(coords.directions) =4
 	walls.coords = coords
 	doors.coords = coords
-	all ra:QuadrilateralRoom, N:Direction, S:Direction, E:Direction, W:Direction | coords.axes[N] = S && coords.axes[E] = W && N!=W && N!=E && #nextRoom[S,this,nextRoom[W,this,nextRoom[N, this, ra]]]>0 implies nextRoom[E,this,nextRoom[S,this,nextRoom[W,this,nextRoom[N, this, ra]]]] = ra
+//Cylcicity constraint; heavy calculation and rarely relevant for test cases. Comment out for quick testing.
+//	all ra:QuadrilateralRoom, N:Direction, S:Direction, E:Direction, W:Direction | coords.axes[N] = S && coords.axes[E] = W && N!=W && N!=E && #nextRoom[S,this,nextRoom[W,this,nextRoom[N, this, ra]]]>0 implies nextRoom[E,this,nextRoom[S,this,nextRoom[W,this,nextRoom[N, this, ra]]]] = ra
 	
 	startRoom in rooms
 	endRoom in rooms
@@ -60,6 +61,28 @@ sig QuadrilateralMaze {
 	all ra:QuadrilateralRoom, rb:QuadrilateralRoom | ra in rb.^(roomOptions[doors, coords])
 	all r:QuadrilateralRoom, d:Direction | #((doors+walls).connection[r][d])<=1
 	#(roomOptions[walls, coords] & roomOptions[doors, coords]) = 0
+}
+
+sig Heart{}
+
+sig Being{
+	//a being can be in a room
+	currRoom: lone Room,
+	healthBar: set Heart,
+	maxHP: set Heart
+} {
+	#healthBar <= #maxHP
+}
+
+sig Game{
+	player: one Being,
+	monsters: set Being,
+	maze: one QuadrilateralMaze
+} {
+	player not in monsters
+	#(player.maxHP) = 5
+	all m:monsters | #(m.maxHP)=1
+	#monsters =2
 }
 
 fun mazeConn [m:QuadrilateralMaze]: Room -> some Direction -> lone Room {
@@ -84,6 +107,8 @@ pred show (m:QuadrilateralMaze) {
 	one Doors
 	no Passages
 one CoordSet
+one Game
+
 //	#(walls.connection)> 0
 }
 
