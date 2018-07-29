@@ -1,29 +1,23 @@
 one sig True {}
 
-abstract sig Room {}
-sig QuadrilateralRoom extends Room {}
+sig Room {}
 
 abstract sig RoomConnectors {
 	connection: Room -> some Direction -> lone Room
 } {
+	// Symmetry
 	roomOptions[] = ~roomOptions[]
+	// Nonduplication
 	all ra:Room, rb:Room | #(connection[ra].rb) <=1
 }
 abstract sig AdjacentRoomConnectors extends RoomConnectors {
 	coords: one CoordSet
 } {
+	// Irreflexivity
 	all r:Room, d:Direction| connection[r][d] != r
+	// All symmetry connections follow the reverse direction
 	all r:Room, d:Direction| #(connection[r][d])>0 implies connection[connection[r][d]][(coords.axes)[d]] = r
 }
-
-one sig t {
-	ra: Room,
-	rb: Room,
-	cs:CoordSet,
-	d:Direction
-} { 
-d in cs.directions
-Doors.connection[ra][d] = rb}
 
 sig Walls extends AdjacentRoomConnectors {}
 sig Doors extends AdjacentRoomConnectors {}
@@ -33,45 +27,62 @@ sig CoordSet {
 	directions: set Direction,
 	axes: Direction-> lone Direction,
 } {
+	//Axes defines the relation between opposite directions; (E->W, W->E, etc.)
 	all d:Direction| d.axes.axes = d
 	no d:Direction| d.axes = d
+	//Completeness of the axes mapping
 	axes[Direction] = directions
 	axes.Direction = directions
 }
 
-sig QuadrilateralMaze {
+abstract sig ConnectedMaze {
 	coords: one CoordSet,
-	startRoom: QuadrilateralRoom,
-	endRoom: QuadrilateralRoom,
-	rooms: set QuadrilateralRoom,
+	startRoom: Room,
+	endRoom: Room,
+	rooms: set Room,
 	walls: one Walls,
-	doors: one Doors,
-	direction: one Direction
-} 
-{
-	
-	#(coords.directions) =4
+	doors: one Doors
+} {
+//Share coordinate systems between all components
 	walls.coords = coords
 	doors.coords = coords
-//Cylcicity constraint; heavy calculation and rarely relevant for test cases. Comment out for quick testing.
-//	all ra:QuadrilateralRoom, N:Direction, S:Direction, E:Direction, W:Direction | coords.axes[N] = S && coords.axes[E] = W && N!=W && N!=E && #nextRoom[S,this,nextRoom[W,this,nextRoom[N, this, ra]]]>0 implies nextRoom[E,this,nextRoom[S,this,nextRoom[W,this,nextRoom[N, this, ra]]]] = ra
-	
+//Basic constraints on start/endroom
 	startRoom in rooms
 	endRoom in rooms
 	startRoom != endRoom
-	all ra:QuadrilateralRoom, rb:QuadrilateralRoom | ra in rb.^(roomOptions[doors, coords])
-	all r:QuadrilateralRoom, d:Direction | #((doors+walls).connection[r][d])<=1
-	#(roomOptions[walls, coords] & roomOptions[doors, coords]) = 0
+//Full maze connectivity
+	all ra:Room, rb:Room | ra in rb.^(roomOptions[doors, coords])
+	//At most one wall/door between a pair of rooms.
+	all r:Room, d:Direction | #((doors+walls).connection[r][d])<=1
+	
+}
+
+sig QuadrilateralMaze extends ConnectedMaze {
+} 
+{
+	// Impose coordinate system
+	#(coords.directions) =4
+//Cylcicity constraint; heavy calculation and rarely relevant for test cases. Comment out for quick testing.
+	all ra:Room, N:Direction, S:Direction, E:Direction, W:Direction | coords.axes[N] = S && coords.axes[E] = W && N!=W && N!=E && #nextRoom[S,this,nextRoom[W,this,nextRoom[N, this, ra]]]>0 implies nextRoom[E,this,nextRoom[S,this,nextRoom[W,this,nextRoom[N, this, ra]]]] = ra
+	
+
+}
+
+sig HexagonalMaze extends ConnectedMaze {
+} 
+{
+	#(coords.directions) =6
+//Couldn't figure out how to express cyclicity in hexagonal coord system. It's not as straightforward as quadrilateral.
 }
 
 sig Heart{}
 
 sig Being{
-	//a being can be in a room
 	currRoom: lone Room,
 	healthBar: set Heart,
 	maxHP: set Heart
 } {
+// The set of hearts in healthBar represents current HP. That should be a subset of maxHP.
 	healthBar in maxHP
 }
 
@@ -90,24 +101,23 @@ sig DisarmEffect extends RoomEffect {
 	target != this
 }
 
-sig DamageEffect extends RoomEffect {
-}
-
 sig Game{
 	player: one Being,
 	monsters: set Being,
-	maze: one QuadrilateralMaze,
+	maze: one ConnectedMaze,
 	effects: set RoomEffect
 } {
 	player not in monsters
+// Players have 5HP in the game
 	#(player.maxHP) = 5
+// Monsters have 1 HP in this game
 	all m:monsters | #(m.maxHP)=1
 	#monsters =2
-	#(monsters.currRoom) = #(monsters) // 0-1 monsters per room.
+	// Constrain rooms of all entities to be in the maze
 	player.currRoom in maze.rooms
 	monsters.currRoom in maze.rooms
 	effects.room in maze.rooms
-
+// monsters and effects are each 0 or 1 to a room
 	all disj a, b : monsters | disj[a.currRoom, b.currRoom]
 	all disj a, b : effects | disj[a.room, b.room]
 }
@@ -128,6 +138,13 @@ fun roomOptions [rc:RoomConnectors, cs:CoordSet]: Room -> Room {
 	{ra:Room, rb:Room|#(ra->cs.directions->rb & rc.connection)>0}
 }
 
+assert mazeSolvable {
+	all m:ConnectedMaze | m.endRoom in (m.startRoom).^(roomOptions[m.doors, m.coords])
+}
+assert walldooruniquenedd {
+//No wall and door makes the same connection
+	all m:ConnectedMaze | #(roomOptions[m.walls, m.coords] & roomOptions[m.doors, m.coords]) = 0
+}
 pred initialize (g, g':Game) {
 	g'.player.maxHP = g.player.maxHP
 	g'.player.healthBar = g.player.maxHP
@@ -186,16 +203,16 @@ pred show (m:QuadrilateralMaze) {
 	#rooms>=4
  	one Walls
 	one Doors
-one CoordSet
-one Game
+	one CoordSet
+	one Game
 
 //	#(walls.connection)> 0
 }
 
 pred showInitialize (g:Game, g':Game) {
 	initialize[g,g']
-#Game=2
-#(g.player.healthBar) =2 
+	#Game=2
+	#(g.player.healthBar) =2 
 }
 //run show for 7  but 1 QuadrilateralMaze
 run showInitialize for 5 but 2 Game
